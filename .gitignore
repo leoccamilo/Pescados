@@ -1,0 +1,25 @@
+# Python
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+
+# Banco de dados
+*.db
+
+# Build
+build_env/
+Alexandrebuild_env/
+build/
+dist/
+*.spec
+
+# Instalador gerado
+PescadosAlexandre_Instalador/
+
+# IDE
+.vscode/
+.idea/
+
+# Claude
+.claude/

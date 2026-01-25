@@ -1,0 +1,86 @@
+Crie um aplicativo web completo para controle de estoque e análise de lucratividade de um negócio de venda de peixes e frutos do mar.
+
+## Contexto do Negócio
+- Usuário: Alexandre, vendedor de pescados
+- Objetivo: Saber se o negócio está dando lucro e acompanhar a evolução ao longo do tempo
+- Produtos: camarão regional, camarão rosa, pescada amarela, dourada, filhote, pescada gó, pata de caranguejo, massa de caranguejo
+
+## Funcionalidades Obrigatórias
+
+### 1. Cadastro de Produtos com Preços Padrão
+- Permitir cadastrar/editar produtos com preço padrão por kg (compra e venda)
+- Os preços padrão devem ser salvos e persistir entre sessões
+- Ao registrar uma transação, o sistema deve sugerir o preço padrão automaticamente
+
+### 2. Registro de Transações (Compra/Venda)
+- Interface simples: selecionar produto com um clique
+- Campos: tipo (compra/venda), peso em kg, data
+- O valor total deve ser calculado automaticamente: peso × preço padrão por kg
+- Permitir sobrescrever o preço padrão quando necessário (promoções, variações)
+- Calcular automaticamente: Lucro = Valor Venda - Valor Compra
+
+### 3. Dashboard com Consolidações
+- Filtros interativos por período: dia, semana, mês, ano
+- Visualização em TABELA mostrando:
+  - Por produto: peso comprado, peso vendido, valor investido, valor vendido, lucro/prejuízo
+  - Total consolidado: investimento total, receita total, lucro/prejuízo total
+- Indicador visual claro de lucratividade (verde = lucro, vermelho = prejuízo)
+
+### 4. Gráficos Interativos
+- Gráfico de barras: comparativo investido vs vendido (por produto e total)
+- Gráfico de linha: evolução do lucro ao longo do tempo
+- Gráfico de pizza: distribuição de vendas por produto
+- Todos os gráficos devem ser filtráveis pelo período selecionado
+
+### 5. Resposta Visual Clara
+- Card destacado respondendo: "O negócio está lucrativo?" com SIM/NÃO
+- Mostrar o valor do lucro ou prejuízo em destaque
+- Usar cores intuitivas (verde/vermelho) para feedback instantâneo
+
+## Requisitos Técnicos
+- Stack: React com Tailwind CSS
+- Persistência: usar localStorage para salvar todos os dados
+- Gráficos: usar Recharts
+- Interface responsiva (funcionar bem no celular)
+- Design limpo e intuitivo, fácil de usar rapidamente no dia a dia
+
+## Estrutura de Dados Sugerida
+
+Produto:
+- id, nome, precoCompraPadrao (R$/kg), precoVendaPadrao (R$/kg)
+
+Transação:
+- id, produtoId, tipo (compra/venda), pesoKg, precoKg, valorTotal, data
+
+## Interface Sugerida
+1. Tela principal com cards de resumo (investido, vendido, lucro)
+2. Seção de registro rápido de transação
+3. Tabela de transações recentes
+4. Área de gráficos com abas ou scroll
+5. Configurações para gerenciar produtos e preços padrão
+
+## Referências de UX/Design
+
+Use como inspiração a experiência destes apps brasileiros populares:
+
+1. **Kyte (kyte.com.br)**: 
+   - Interface limpa e minimalista
+   - Seleção de produto com um toque
+   - Cards de resumo financeiro destacados
+   - Resposta visual clara: "está entrando mais dinheiro do que saindo?"
+
+2. **Estoque Fácil 2.0 (Google Play)**:
+   - Cadastro de produtos em segundos
+   - Relatórios de lucro sobre vendas
+   - Gráficos simples e objetivos
+   - Foco em "controle total na palma da mão"
+
+3. **SOMEI (app para MEI)**:
+   - Classificação por dia, mês e ano
+   - Visão clara: quanto a empresa fatura vs quanto lucra
+   - Dispensa planilhas e cadernos
+
+O objetivo é criar algo tão simples quanto esses apps, 
+focado na pergunta principal: "O negócio está dando lucro?"
+
+Crie o aplicativo completo em um único arquivo .jsx, pronto para uso.
