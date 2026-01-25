@@ -49,7 +49,7 @@ python server.py
 
 1. Conecte o celular na mesma rede Wi-Fi do computador
 2. Inicie o servidor no computador
-3. No celular, acesse o IP mostrado no terminal (ex: `http://192.168.1.100:5000`)
+3. No celular, acesse o IP mostrado no terminal (ex: `http://192.123.1.100:5000`)
 4. Instale como PWA para usar offline
 
 ## 🔧 Build do Executável
