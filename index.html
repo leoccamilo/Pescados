@@ -255,6 +255,10 @@
       });
       const [dataFim, setDataFim] = useState(formatarDataInput(new Date()));
 
+      // Estados para filtros da aba Gráficos (período personalizado)
+      const [dataInicioGraficos, setDataInicioGraficos] = useState('');
+      const [dataFimGraficos, setDataFimGraficos] = useState(formatarDataInput(new Date()));
+
       // Estado para nova transação
       const [novaTransacao, setNovaTransacao] = useState({
         produtoId: '',
@@ -280,16 +284,23 @@
 
         switch (filtroTempo) {
           case 'dia':
-            inicio = hoje;
+            // Hoje
+            inicio = new Date(hoje);
             break;
           case 'semana':
-            inicio.setDate(hoje.getDate() - 7);
+            // Semana atual (começando na segunda-feira)
+            inicio = new Date(hoje);
+            const diaSemana = inicio.getDay();
+            const diasParaSegunda = diaSemana === 0 ? 6 : diaSemana - 1;
+            inicio.setDate(inicio.getDate() - diasParaSegunda);
             break;
           case 'mes':
-            inicio.setMonth(hoje.getMonth() - 1);
+            // Mês atual (dia 1 até hoje)
+            inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
             break;
           case 'ano':
-            inicio.setFullYear(hoje.getFullYear() - 1);
+            // Ano atual (1 de janeiro até hoje)
+            inicio = new Date(hoje.getFullYear(), 0, 1);
             break;
           default:
             break;
@@ -298,6 +309,30 @@
         setDataInicio(formatarDataInput(inicio));
         setDataFim(formatarDataInput(hoje));
       }, [filtroTempo]);
+
+      // Obter label do período atual para exibição
+      const getLabelPeriodo = () => {
+        const hoje = new Date();
+        const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+                       'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
+        switch (filtroTempo) {
+          case 'dia':
+            return `Hoje (${formatarData(hoje)})`;
+          case 'semana':
+            const inicio = new Date(hoje);
+            const diaSemana = inicio.getDay();
+            const diasParaSegunda = diaSemana === 0 ? 6 : diaSemana - 1;
+            inicio.setDate(inicio.getDate() - diasParaSegunda);
+            return `Semana Atual (${formatarData(inicio)} - ${formatarData(hoje)})`;
+          case 'mes':
+            return `${meses[hoje.getMonth()]}/${hoje.getFullYear()}`;
+          case 'ano':
+            return `Ano ${hoje.getFullYear()}`;
+          default:
+            return '';
+        }
+      };
 
       // Atualizar preço padrão ao selecionar produto
       useEffect(() => {
@@ -362,6 +397,34 @@
 
         return { porProduto, totais };
       }, [transacoesFiltradas, produtos]);
+
+      // Primeira e última data de transação
+      const datasLimites = useMemo(() => {
+        if (todasTransacoes.length === 0) return { primeira: null, ultima: null };
+        const datas = todasTransacoes.map(t => new Date(t.data));
+        const primeira = new Date(Math.min(...datas));
+        const ultima = new Date(Math.max(...datas));
+        return { primeira, ultima };
+      }, [todasTransacoes]);
+
+      // Inicializar datas da aba Gráficos quando houver dados
+      useEffect(() => {
+        if (datasLimites.primeira && !dataInicioGraficos) {
+          setDataInicioGraficos(formatarDataInput(datasLimites.primeira));
+        }
+      }, [datasLimites]);
+
+      // Transações filtradas para aba Gráficos (período personalizado)
+      const transacoesFiltradasGraficos = useMemo(() => {
+        if (!dataInicioGraficos || !dataFimGraficos) return todasTransacoes;
+        return todasTransacoes.filter(t => {
+          const dataTransacao = new Date(t.data);
+          const inicio = new Date(dataInicioGraficos);
+          const fim = new Date(dataFimGraficos);
+          fim.setHours(23, 59, 59);
+          return dataTransacao >= inicio && dataTransacao <= fim;
+        });
+      }, [todasTransacoes, dataInicioGraficos, dataFimGraficos]);
 
       // Anos disponíveis nas transações
       const anosDisponiveis = useMemo(() => {
@@ -497,6 +560,39 @@
       // Cores para anos no gráfico
       const coresAnos = ['#3b82f6', '#f97316', '#10b981', '#8b5cf6', '#ef4444'];
 
+      // Ranking de produtos por lucro e kg vendido
+      const rankingProdutos = useMemo(() => {
+        const produtos = Object.entries(consolidacoes.porProduto)
+          .filter(([_, dados]) => dados.valorVendido > 0 || dados.lucro !== 0)
+          .map(([id, dados]) => ({
+            id,
+            nome: dados.nome,
+            lucro: dados.lucro,
+            pesoVendido: dados.pesoVendido,
+          }));
+
+        const totalLucro = produtos.reduce((acc, p) => acc + Math.max(0, p.lucro), 0);
+        const totalPesoVendido = produtos.reduce((acc, p) => acc + p.pesoVendido, 0);
+
+        const porLucro = produtos
+          .filter(p => p.lucro > 0)
+          .sort((a, b) => b.lucro - a.lucro)
+          .map(p => ({
+            ...p,
+            percentual: totalLucro > 0 ? (p.lucro / totalLucro * 100) : 0,
+          }));
+
+        const porPeso = produtos
+          .filter(p => p.pesoVendido > 0)
+          .sort((a, b) => b.pesoVendido - a.pesoVendido)
+          .map(p => ({
+            ...p,
+            percentual: totalPesoVendido > 0 ? (p.pesoVendido / totalPesoVendido * 100) : 0,
+          }));
+
+        return { porLucro, porPeso, totalLucro, totalPesoVendido };
+      }, [consolidacoes]);
+
       // Dados para gráfico de barras
       const dadosBarras = useMemo(() => {
         return Object.entries(consolidacoes.porProduto)
@@ -543,6 +639,71 @@
             cor: CORES[index % CORES.length],
           }));
       }, [consolidacoes]);
+
+      // Dados para gráficos da aba Gráficos (período personalizado)
+      const dadosGraficosPersonalizado = useMemo(() => {
+        // Consolidação por produto
+        const porProduto = {};
+        produtos.forEach(p => {
+          porProduto[p.id] = {
+            nome: p.nome,
+            valorInvestido: 0,
+            valorVendido: 0,
+          };
+        });
+
+        transacoesFiltradasGraficos.forEach(t => {
+          if (porProduto[t.produtoId]) {
+            if (t.tipo === 'compra') {
+              porProduto[t.produtoId].valorInvestido += t.valorTotal;
+            } else {
+              porProduto[t.produtoId].valorVendido += t.valorTotal;
+            }
+          }
+        });
+
+        // Barras
+        const barras = Object.entries(porProduto)
+          .filter(([_, dados]) => dados.valorInvestido > 0 || dados.valorVendido > 0)
+          .map(([id, dados]) => ({
+            nome: dados.nome.split(' ')[0],
+            Investido: dados.valorInvestido,
+            Vendido: dados.valorVendido,
+          }));
+
+        // Linha (evolução do lucro)
+        const lucrosPorData = {};
+        transacoesFiltradasGraficos
+          .sort((a, b) => new Date(a.data) - new Date(b.data))
+          .forEach(t => {
+            const dataStr = formatarData(t.data);
+            if (!lucrosPorData[dataStr]) {
+              lucrosPorData[dataStr] = 0;
+            }
+            if (t.tipo === 'venda') {
+              lucrosPorData[dataStr] += t.valorTotal;
+            } else {
+              lucrosPorData[dataStr] -= t.valorTotal;
+            }
+          });
+
+        let lucroAcumulado = 0;
+        const linha = Object.entries(lucrosPorData).map(([data, valor]) => {
+          lucroAcumulado += valor;
+          return { data, lucro: lucroAcumulado };
+        });
+
+        // Pizza
+        const pizza = Object.entries(porProduto)
+          .filter(([_, dados]) => dados.valorVendido > 0)
+          .map(([id, dados], index) => ({
+            nome: dados.nome,
+            valor: dados.valorVendido,
+            cor: CORES[index % CORES.length],
+          }));
+
+        return { barras, linha, pizza };
+      }, [transacoesFiltradasGraficos, produtos]);
 
       // Handlers
       const handleRegistrarTransacao = async (e) => {
@@ -775,11 +936,11 @@
             <div className="max-w-6xl mx-auto flex overflow-x-auto">
               {[
                 { id: 'dashboard', label: '📊 Dashboard' },
-                { id: 'historico', label: '📅 Histórico' },
                 { id: 'registro', label: '➕ Registrar' },
                 { id: 'transacoes', label: '📋 Transações' },
-                { id: 'graficos', label: '📈 Gráficos' },
                 { id: 'produtos', label: '⚙️ Produtos' },
+                { id: 'historico', label: '📅 Histórico' },
+                { id: 'graficos', label: '📈 Gráficos' },
               ].map(aba => (
                 <button
                   key={aba.id}
@@ -800,14 +961,51 @@
             {/* Dashboard */}
             {abaAtiva === 'dashboard' && (
               <div className="space-y-6">
-                {/* Card Principal de Lucratividade */}
-                <div className={`rounded-2xl p-6 shadow-lg ${lucrativo ? 'bg-green-500' : 'bg-red-500'} text-white`}>
-                  <div className="text-center">
-                    <p className="text-lg opacity-90">O negócio está lucrativo?</p>
-                    <p className="text-5xl font-bold my-2">{lucrativo ? '✅ SIM' : '❌ NÃO'}</p>
-                    <p className="text-3xl font-semibold">
-                      {lucrativo ? 'Lucro: ' : 'Prejuízo: '}{formatarMoeda(Math.abs(consolidacoes.totais.lucro))}
-                    </p>
+                {/* Card Principal de Lucratividade com Rankings */}
+                <div className={`rounded-2xl p-6 shadow-lg ${lucrativo ? 'bg-gradient-to-br from-green-500 to-green-600' : 'bg-gradient-to-br from-red-500 to-red-600'} text-white`}>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* Coluna 1: Status de Lucratividade */}
+                    <div className="text-center md:border-r md:border-white/30 md:pr-6">
+                      <p className="text-sm opacity-80 uppercase tracking-wide">O negócio está lucrativo?</p>
+                      <p className="text-4xl font-bold my-2">{lucrativo ? '✅ SIM' : '❌ NÃO'}</p>
+                      <p className="text-2xl font-semibold">
+                        {lucrativo ? 'Lucro: ' : 'Prejuízo: '}{formatarMoeda(Math.abs(consolidacoes.totais.lucro))}
+                      </p>
+                    </div>
+
+                    {/* Coluna 2: Ranking por Lucro */}
+                    <div className="md:border-r md:border-white/30 md:pr-6">
+                      <p className="text-sm opacity-80 uppercase tracking-wide mb-2">% Participação no Lucro</p>
+                      {rankingProdutos.porLucro.length > 0 ? (
+                        <div className="space-y-1">
+                          {rankingProdutos.porLucro.slice(0, 4).map((p, idx) => (
+                            <div key={p.id} className="flex justify-between items-center text-sm">
+                              <span className="truncate mr-2">{idx + 1}. {p.nome}</span>
+                              <span className="font-bold whitespace-nowrap">{p.percentual.toFixed(1)}%</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm opacity-70">Sem vendas no período</p>
+                      )}
+                    </div>
+
+                    {/* Coluna 3: Ranking por Peso Vendido */}
+                    <div>
+                      <p className="text-sm opacity-80 uppercase tracking-wide mb-2">% Participação em Vendas (kg)</p>
+                      {rankingProdutos.porPeso.length > 0 ? (
+                        <div className="space-y-1">
+                          {rankingProdutos.porPeso.slice(0, 4).map((p, idx) => (
+                            <div key={p.id} className="flex justify-between items-center text-sm">
+                              <span className="truncate mr-2">{idx + 1}. {p.nome}</span>
+                              <span className="font-bold whitespace-nowrap">{p.percentual.toFixed(1)}%</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm opacity-70">Sem vendas no período</p>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -828,21 +1026,7 @@
                         {periodo === 'dia' ? 'Hoje' : periodo === 'semana' ? 'Semana' : periodo === 'mes' ? 'Mês' : 'Ano'}
                       </button>
                     ))}
-                    <div className="flex gap-2 ml-auto flex-wrap">
-                      <input
-                        type="date"
-                        value={dataInicio}
-                        onChange={(e) => setDataInicio(e.target.value)}
-                        className="px-3 py-2 border rounded-lg text-sm"
-                      />
-                      <span className="self-center text-gray-500">até</span>
-                      <input
-                        type="date"
-                        value={dataFim}
-                        onChange={(e) => setDataFim(e.target.value)}
-                        className="px-3 py-2 border rounded-lg text-sm"
-                      />
-                    </div>
+                    <span className="ml-auto text-sm text-gray-500 font-medium">{getLabelPeriodo()}</span>
                   </div>
                 </div>
 
@@ -1339,32 +1523,37 @@
             {/* Gráficos */}
             {abaAtiva === 'graficos' && (
               <div className="space-y-6">
-                {/* Filtros de Período */}
+                {/* Filtros de Período Personalizado */}
                 <div className="bg-white rounded-xl p-4 shadow">
-                  <div className="flex flex-wrap gap-2 items-center">
+                  <div className="flex flex-wrap gap-4 items-center">
                     <span className="font-medium text-gray-700">Período:</span>
-                    {['dia', 'semana', 'mes', 'ano'].map(periodo => (
-                      <button
-                        key={periodo}
-                        onClick={() => setFiltroTempo(periodo)}
-                        className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                          filtroTempo === periodo
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
-                      >
-                        {periodo === 'dia' ? 'Hoje' : periodo === 'semana' ? 'Semana' : periodo === 'mes' ? 'Mês' : 'Ano'}
-                      </button>
-                    ))}
+                    <div className="flex gap-2 items-center flex-wrap">
+                      <input
+                        type="date"
+                        value={dataInicioGraficos}
+                        onChange={(e) => setDataInicioGraficos(e.target.value)}
+                        className="px-3 py-2 border rounded-lg text-sm"
+                      />
+                      <span className="text-gray-500">até</span>
+                      <input
+                        type="date"
+                        value={dataFimGraficos}
+                        onChange={(e) => setDataFimGraficos(e.target.value)}
+                        className="px-3 py-2 border rounded-lg text-sm"
+                      />
+                    </div>
+                    <span className="text-sm text-gray-500 ml-auto">
+                      {transacoesFiltradasGraficos.length} transações no período
+                    </span>
                   </div>
                 </div>
 
                 {/* Gráfico de Barras */}
                 <div className="bg-white rounded-xl p-6 shadow">
                   <h3 className="text-lg font-semibold text-gray-800 mb-4">Investido vs Vendido por Produto</h3>
-                  {dadosBarras.length > 0 ? (
+                  {dadosGraficosPersonalizado.barras.length > 0 ? (
                     <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={dadosBarras}>
+                      <BarChart data={dadosGraficosPersonalizado.barras}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="nome" />
                         <YAxis tickFormatter={(v) => `R$${v}`} />
@@ -1381,10 +1570,10 @@
 
                 {/* Gráfico de Linha */}
                 <div className="bg-white rounded-xl p-6 shadow">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Evolução do Lucro</h3>
-                  {dadosLinha.length > 0 ? (
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Evolução do Lucro Acumulado</h3>
+                  {dadosGraficosPersonalizado.linha.length > 0 ? (
                     <ResponsiveContainer width="100%" height={300}>
-                      <LineChart data={dadosLinha}>
+                      <LineChart data={dadosGraficosPersonalizado.linha}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="data" />
                         <YAxis tickFormatter={(v) => `R$${v}`} />
@@ -1408,11 +1597,11 @@
                 {/* Gráfico de Pizza */}
                 <div className="bg-white rounded-xl p-6 shadow">
                   <h3 className="text-lg font-semibold text-gray-800 mb-4">Distribuição de Vendas por Produto</h3>
-                  {dadosPizza.length > 0 ? (
+                  {dadosGraficosPersonalizado.pizza.length > 0 ? (
                     <ResponsiveContainer width="100%" height={300}>
                       <PieChart>
                         <Pie
-                          data={dadosPizza}
+                          data={dadosGraficosPersonalizado.pizza}
                           cx="50%"
                           cy="50%"
                           labelLine={false}
@@ -1421,7 +1610,7 @@
                           fill="#8884d8"
                           dataKey="valor"
                         >
-                          {dadosPizza.map((entry, index) => (
+                          {dadosGraficosPersonalizado.pizza.map((entry, index) => (
                             <Cell key={`cell-${index}`} fill={entry.cor} />
                           ))}
                         </Pie>
