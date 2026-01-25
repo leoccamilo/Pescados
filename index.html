@@ -966,7 +966,7 @@
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {/* Coluna 1: Status de Lucratividade */}
                     <div className="text-center md:border-r md:border-white/30 md:pr-6">
-                      <p className="text-sm opacity-80 uppercase tracking-wide">O negócio está lucrativo?</p>
+                      <p className="text-sm font-bold opacity-90 uppercase tracking-wide">O negócio está lucrativo?</p>
                       <p className="text-4xl font-bold my-2">{lucrativo ? '✅ SIM' : '❌ NÃO'}</p>
                       <p className="text-2xl font-semibold">
                         {lucrativo ? 'Lucro: ' : 'Prejuízo: '}{formatarMoeda(Math.abs(consolidacoes.totais.lucro))}
@@ -975,7 +975,7 @@
 
                     {/* Coluna 2: Ranking por Lucro */}
                     <div className="md:border-r md:border-white/30 md:pr-6">
-                      <p className="text-sm opacity-80 uppercase tracking-wide mb-2">% Participação no Lucro</p>
+                      <p className="text-sm font-bold opacity-90 uppercase tracking-wide mb-2">% Participação no Lucro</p>
                       {rankingProdutos.porLucro.length > 0 ? (
                         <div className="space-y-1">
                           {rankingProdutos.porLucro.slice(0, 4).map((p, idx) => (
@@ -992,7 +992,7 @@
 
                     {/* Coluna 3: Ranking por Peso Vendido */}
                     <div>
-                      <p className="text-sm opacity-80 uppercase tracking-wide mb-2">% Participação em Vendas (kg)</p>
+                      <p className="text-sm font-bold opacity-90 uppercase tracking-wide mb-2">% Participação em Vendas (kg)</p>
                       {rankingProdutos.porPeso.length > 0 ? (
                         <div className="space-y-1">
                           {rankingProdutos.porPeso.slice(0, 4).map((p, idx) => (
