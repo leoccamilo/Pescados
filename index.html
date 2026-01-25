@@ -247,6 +247,7 @@
 
       const [abaAtiva, setAbaAtiva] = useState('dashboard');
       const [filtroTempo, setFiltroTempo] = useState('mes');
+      const [anosComparacao, setAnosComparacao] = useState([]);
       const [dataInicio, setDataInicio] = useState(() => {
         const hoje = new Date();
         hoje.setMonth(hoje.getMonth() - 1);
@@ -361,6 +362,128 @@
 
         return { porProduto, totais };
       }, [transacoesFiltradas, produtos]);
+
+      // Anos disponíveis nas transações
+      const anosDisponiveis = useMemo(() => {
+        const anos = new Set();
+        todasTransacoes.forEach(t => {
+          anos.add(new Date(t.data).getFullYear());
+        });
+        return Array.from(anos).sort((a, b) => b - a);
+      }, [todasTransacoes]);
+
+      // Inicializar anos de comparação quando houver dados
+      useEffect(() => {
+        if (anosDisponiveis.length > 0 && anosComparacao.length === 0) {
+          setAnosComparacao(anosDisponiveis.slice(0, 2));
+        }
+      }, [anosDisponiveis]);
+
+      // Dados de comparação anual
+      const dadosAnuais = useMemo(() => {
+        const porAno = {};
+
+        todasTransacoes.forEach(t => {
+          const ano = new Date(t.data).getFullYear();
+          if (!porAno[ano]) {
+            porAno[ano] = { ano, investido: 0, vendido: 0, lucro: 0 };
+          }
+          if (t.tipo === 'compra') {
+            porAno[ano].investido += t.valorTotal;
+          } else {
+            porAno[ano].vendido += t.valorTotal;
+          }
+          porAno[ano].lucro = porAno[ano].vendido - porAno[ano].investido;
+        });
+
+        return Object.values(porAno).sort((a, b) => a.ano - b.ano);
+      }, [todasTransacoes]);
+
+      // Dados mensais por ano (para comparativo)
+      const dadosMensaisPorAno = useMemo(() => {
+        const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+        const dados = meses.map((mes, idx) => ({ mes, mesNum: idx }));
+
+        anosComparacao.forEach(ano => {
+          dados.forEach(d => {
+            d[`lucro${ano}`] = 0;
+            d[`investido${ano}`] = 0;
+            d[`vendido${ano}`] = 0;
+          });
+        });
+
+        todasTransacoes.forEach(t => {
+          const data = new Date(t.data);
+          const ano = data.getFullYear();
+          const mes = data.getMonth();
+
+          if (anosComparacao.includes(ano)) {
+            if (t.tipo === 'compra') {
+              dados[mes][`investido${ano}`] += t.valorTotal;
+            } else {
+              dados[mes][`vendido${ano}`] += t.valorTotal;
+            }
+            dados[mes][`lucro${ano}`] = dados[mes][`vendido${ano}`] - dados[mes][`investido${ano}`];
+          }
+        });
+
+        return dados;
+      }, [todasTransacoes, anosComparacao]);
+
+      // Insights anuais
+      const insightsAnuais = useMemo(() => {
+        if (dadosAnuais.length === 0) return null;
+
+        const melhorAnoLucro = dadosAnuais.reduce((a, b) => a.lucro > b.lucro ? a : b);
+        const melhorAnoInvestimento = dadosAnuais.reduce((a, b) => a.investido > b.investido ? a : b);
+
+        // Melhor mês (média de todos os anos)
+        const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+                       'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+        const lucroPorMes = Array(12).fill(0);
+        const contagemPorMes = Array(12).fill(0);
+
+        todasTransacoes.forEach(t => {
+          const mes = new Date(t.data).getMonth();
+          if (t.tipo === 'venda') {
+            lucroPorMes[mes] += t.valorTotal;
+          } else {
+            lucroPorMes[mes] -= t.valorTotal;
+          }
+          contagemPorMes[mes]++;
+        });
+
+        let melhorMesIdx = 0;
+        let melhorMesValor = lucroPorMes[0];
+        lucroPorMes.forEach((lucro, idx) => {
+          if (lucro > melhorMesValor) {
+            melhorMesValor = lucro;
+            melhorMesIdx = idx;
+          }
+        });
+
+        // Crescimento ano a ano
+        let crescimento = null;
+        if (dadosAnuais.length >= 2) {
+          const anoAnterior = dadosAnuais[dadosAnuais.length - 2];
+          const anoAtual = dadosAnuais[dadosAnuais.length - 1];
+          if (anoAnterior.lucro !== 0) {
+            crescimento = ((anoAtual.lucro - anoAnterior.lucro) / Math.abs(anoAnterior.lucro)) * 100;
+          }
+        }
+
+        return {
+          melhorAnoLucro,
+          melhorAnoInvestimento,
+          melhorMes: { nome: meses[melhorMesIdx], lucro: melhorMesValor },
+          crescimento,
+          anosComparados: dadosAnuais.length >= 2 ?
+            `${dadosAnuais[dadosAnuais.length - 2].ano}→${dadosAnuais[dadosAnuais.length - 1].ano}` : null
+        };
+      }, [dadosAnuais, todasTransacoes]);
+
+      // Cores para anos no gráfico
+      const coresAnos = ['#3b82f6', '#f97316', '#10b981', '#8b5cf6', '#ef4444'];
 
       // Dados para gráfico de barras
       const dadosBarras = useMemo(() => {
@@ -730,6 +853,153 @@
                     <p className="text-sm text-gray-400">{consolidacoes.totais.lucro >= 0 ? 'Lucro' : 'Prejuízo'}</p>
                   </div>
                 </div>
+
+                {/* Análise Comparativa Anual */}
+                {anosDisponiveis.length > 0 && (
+                  <div className="bg-white rounded-xl shadow overflow-hidden">
+                    <div className="p-4 border-b">
+                      <h2 className="text-lg font-semibold text-gray-800">📊 Análise Comparativa Anual</h2>
+                    </div>
+                    <div className="p-4 space-y-6">
+                      {/* Seletor de Anos */}
+                      <div className="flex flex-wrap gap-2 items-center">
+                        <span className="font-medium text-gray-700">Comparar anos:</span>
+                        {anosDisponiveis.map(ano => (
+                          <button
+                            key={ano}
+                            onClick={() => {
+                              if (anosComparacao.includes(ano)) {
+                                setAnosComparacao(anosComparacao.filter(a => a !== ano));
+                              } else {
+                                setAnosComparacao([...anosComparacao, ano].sort((a, b) => a - b));
+                              }
+                            }}
+                            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                              anosComparacao.includes(ano)
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                          >
+                            {ano}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Cards de Insights */}
+                      {insightsAnuais && (
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                          <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 border border-green-200">
+                            <p className="text-green-700 text-sm font-medium">🏆 Ano Mais Lucrativo</p>
+                            <p className="text-2xl font-bold text-green-800">{insightsAnuais.melhorAnoLucro.ano}</p>
+                            <p className="text-sm text-green-600">{formatarMoeda(insightsAnuais.melhorAnoLucro.lucro)}</p>
+                          </div>
+                          <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-4 border border-orange-200">
+                            <p className="text-orange-700 text-sm font-medium">💰 Maior Investimento</p>
+                            <p className="text-2xl font-bold text-orange-800">{insightsAnuais.melhorAnoInvestimento.ano}</p>
+                            <p className="text-sm text-orange-600">{formatarMoeda(insightsAnuais.melhorAnoInvestimento.investido)}</p>
+                          </div>
+                          <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border border-purple-200">
+                            <p className="text-purple-700 text-sm font-medium">📅 Mês Mais Lucrativo</p>
+                            <p className="text-2xl font-bold text-purple-800">{insightsAnuais.melhorMes.nome}</p>
+                            <p className="text-sm text-purple-600">{formatarMoeda(insightsAnuais.melhorMes.lucro)}</p>
+                          </div>
+                          {insightsAnuais.crescimento !== null && (
+                            <div className={`bg-gradient-to-br ${insightsAnuais.crescimento >= 0 ? 'from-blue-50 to-blue-100 border-blue-200' : 'from-red-50 to-red-100 border-red-200'} rounded-xl p-4 border`}>
+                              <p className={`${insightsAnuais.crescimento >= 0 ? 'text-blue-700' : 'text-red-700'} text-sm font-medium`}>
+                                📈 Crescimento {insightsAnuais.anosComparados}
+                              </p>
+                              <p className={`text-2xl font-bold ${insightsAnuais.crescimento >= 0 ? 'text-blue-800' : 'text-red-800'}`}>
+                                {insightsAnuais.crescimento >= 0 ? '+' : ''}{insightsAnuais.crescimento.toFixed(1)}%
+                              </p>
+                              <p className={`text-sm ${insightsAnuais.crescimento >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                                {insightsAnuais.crescimento >= 0 ? 'Lucro aumentou' : 'Lucro diminuiu'}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Gráfico Comparativo Anual */}
+                      {dadosAnuais.length > 0 && (
+                        <div>
+                          <h3 className="text-md font-semibold text-gray-700 mb-3">Resultado por Ano</h3>
+                          <ResponsiveContainer width="100%" height={250}>
+                            <BarChart data={dadosAnuais}>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis dataKey="ano" />
+                              <YAxis tickFormatter={(v) => `R$${(v/1000).toFixed(0)}k`} />
+                              <Tooltip formatter={(v) => formatarMoeda(v)} />
+                              <Legend />
+                              <Bar dataKey="investido" name="Investido" fill="#f97316" />
+                              <Bar dataKey="vendido" name="Vendido" fill="#3b82f6" />
+                              <Bar dataKey="lucro" name="Lucro" fill="#10b981" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      )}
+
+                      {/* Gráfico Comparativo Mensal */}
+                      {anosComparacao.length > 0 && (
+                        <div>
+                          <h3 className="text-md font-semibold text-gray-700 mb-3">Lucro Mensal - Comparativo entre Anos</h3>
+                          <ResponsiveContainer width="100%" height={300}>
+                            <LineChart data={dadosMensaisPorAno}>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis dataKey="mes" />
+                              <YAxis tickFormatter={(v) => `R$${(v/1000).toFixed(0)}k`} />
+                              <Tooltip formatter={(v) => formatarMoeda(v)} />
+                              <Legend />
+                              {anosComparacao.map((ano, idx) => (
+                                <Line
+                                  key={ano}
+                                  type="monotone"
+                                  dataKey={`lucro${ano}`}
+                                  name={`Lucro ${ano}`}
+                                  stroke={coresAnos[idx % coresAnos.length]}
+                                  strokeWidth={2}
+                                  dot={{ r: 4 }}
+                                />
+                              ))}
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                      )}
+
+                      {/* Tabela Comparativa por Ano */}
+                      <div>
+                        <h3 className="text-md font-semibold text-gray-700 mb-3">Resumo por Ano</h3>
+                        <div className="overflow-x-auto">
+                          <table className="w-full">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Ano</th>
+                                <th className="px-4 py-3 text-right text-sm font-medium text-gray-600">Investido</th>
+                                <th className="px-4 py-3 text-right text-sm font-medium text-gray-600">Vendido</th>
+                                <th className="px-4 py-3 text-right text-sm font-medium text-gray-600">Lucro</th>
+                                <th className="px-4 py-3 text-right text-sm font-medium text-gray-600">Margem</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {dadosAnuais.map(d => (
+                                <tr key={d.ano} className="hover:bg-gray-50">
+                                  <td className="px-4 py-3 text-sm font-bold text-gray-800">{d.ano}</td>
+                                  <td className="px-4 py-3 text-sm text-right text-orange-600">{formatarMoeda(d.investido)}</td>
+                                  <td className="px-4 py-3 text-sm text-right text-blue-600">{formatarMoeda(d.vendido)}</td>
+                                  <td className={`px-4 py-3 text-sm text-right font-semibold ${d.lucro >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    {formatarMoeda(d.lucro)}
+                                  </td>
+                                  <td className={`px-4 py-3 text-sm text-right ${d.vendido > 0 ? (d.lucro/d.vendido*100 >= 0 ? 'text-green-600' : 'text-red-600') : 'text-gray-400'}`}>
+                                    {d.vendido > 0 ? `${(d.lucro/d.vendido*100).toFixed(1)}%` : '-'}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Tabela de Consolidação por Produto */}
                 <div className="bg-white rounded-xl shadow overflow-hidden">
