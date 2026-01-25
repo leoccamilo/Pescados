@@ -825,7 +825,7 @@ export default function PescadosApp() {
       {/* Footer */}
       <footer className="bg-gray-800 text-white p-4 mt-8">
         <div className="max-w-6xl mx-auto text-center text-sm">
-          <p>Pescados do Alexandre © 2024</p>
+          <p>Pescados do Alexandre © 2026</p>
           <p className="text-gray-400">Controle de Estoque e Lucratividade</p>
         </div>
       </footer>
