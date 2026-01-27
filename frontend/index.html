@@ -107,13 +107,19 @@
       const [ultimaSync, setUltimaSync] = useState(null);
       const syncIntervalRef = useRef(null);
 
-      // Verificar se o servidor está disponível (ping real)
+      // Verificar se o servidor está disponível (ping com timeout de 3s)
       const checkServerAvailability = useCallback(async () => {
         try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 3000);
+
           const res = await fetch(`${API_URL}/produtos`, {
             method: 'GET',
-            cache: 'no-store'
+            cache: 'no-store',
+            signal: controller.signal,
           });
+
+          clearTimeout(timeoutId);
           setServerAvailable(res.ok);
           return res.ok;
         } catch {
@@ -172,11 +178,18 @@
           try {
             // Remover campos temporários antes de enviar
             const { tempId, criadoEm, pendente, ...dadosTransacao } = transacao;
+
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 3000);
+
             const res = await fetch(`${API_URL}/transacoes`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(dadosTransacao),
+              signal: controller.signal,
             });
+
+            clearTimeout(timeoutId);
 
             if (res.ok) {
               const transacaoSalva = await res.json();
@@ -486,13 +499,19 @@
           });
         };
 
-        // Tentar enviar para o servidor
+        // Tentar enviar para o servidor (timeout de 3 segundos)
         try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 3000);
+
           const res = await fetch(`${API_URL}/transacoes`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(transacao),
+            signal: controller.signal,
           });
+
+          clearTimeout(timeoutId);
 
           if (res.ok) {
             const novaTransacaoSalva = await res.json();
