@@ -10,26 +10,33 @@ import webbrowser
 import threading
 import time
 
-# Definir diretorio base (funciona tanto em dev quanto no executavel)
+# Definir diretorios (funciona tanto em dev quanto no executavel)
 if getattr(sys, 'frozen', False):
-    # Executando como executavel PyInstaller
-    BASE_DIR = os.path.dirname(sys.executable)
+    # Executando como executavel PyInstaller (--onefile)
+    # _MEIPASS contem os arquivos embutidos (frontend, etc)
+    # executable contem o caminho do .exe (para salvar o banco de dados)
+    BUNDLE_DIR = sys._MEIPASS
+    APP_DIR = os.path.dirname(sys.executable)
 else:
     # Executando como script Python
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    BUNDLE_DIR = os.path.dirname(os.path.abspath(__file__))
+    APP_DIR = BUNDLE_DIR
 
-# Mudar para o diretorio base
-os.chdir(BASE_DIR)
+# Mudar para o diretorio do app
+os.chdir(APP_DIR)
 
-# Configurar caminho do banco de dados
-DB_PATH = os.path.join(BASE_DIR, 'pescados.db')
+# Configurar caminho do banco de dados (junto ao .exe, nao na pasta temp)
+DB_PATH = os.path.join(APP_DIR, 'pescados.db')
+
+# Definir pasta do frontend (embutida no executavel)
+FRONTEND_DIR = os.path.join(BUNDLE_DIR, "frontend")
 
 # Importar Flask e configurar app
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 import sqlite3
 
-app = Flask(__name__, static_folder=BASE_DIR)
+app = Flask(__name__)
 CORS(app)
 
 # ==================== DATABASE ====================
@@ -169,23 +176,23 @@ def excluir_transacao(id):
 
 @app.route('/')
 def index():
-    return send_from_directory(BASE_DIR, 'index.html')
+    return send_from_directory(FRONTEND_DIR, 'index.html')
 
 @app.route('/manifest.json')
 def manifest():
-    return send_from_directory(BASE_DIR, 'manifest.json', mimetype='application/manifest+json')
+    return send_from_directory(FRONTEND_DIR, 'manifest.json', mimetype='application/manifest+json')
 
 @app.route('/sw.js')
 def service_worker():
-    return send_from_directory(BASE_DIR, 'sw.js', mimetype='application/javascript')
+    return send_from_directory(FRONTEND_DIR, 'sw.js', mimetype='application/javascript')
 
 @app.route('/icon-192.png')
 def icon_192():
-    return send_from_directory(BASE_DIR, 'icon-192.png', mimetype='image/png')
+    return send_from_directory(FRONTEND_DIR, 'icon-192.png', mimetype='image/png')
 
 @app.route('/icon-512.png')
 def icon_512():
-    return send_from_directory(BASE_DIR, 'icon-512.png', mimetype='image/png')
+    return send_from_directory(FRONTEND_DIR, 'icon-512.png', mimetype='image/png')
 
 @app.route('/api/produtos', methods=['GET'])
 def api_get_produtos():

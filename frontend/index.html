@@ -247,17 +247,12 @@
 
       const [abaAtiva, setAbaAtiva] = useState('dashboard');
       const [filtroTempo, setFiltroTempo] = useState('mes');
-      const [anosComparacao, setAnosComparacao] = useState([]);
       const [dataInicio, setDataInicio] = useState(() => {
         const hoje = new Date();
         hoje.setMonth(hoje.getMonth() - 1);
         return formatarDataInput(hoje);
       });
       const [dataFim, setDataFim] = useState(formatarDataInput(new Date()));
-
-      // Estados para filtros da aba Gráficos (período personalizado)
-      const [dataInicioGraficos, setDataInicioGraficos] = useState('');
-      const [dataFimGraficos, setDataFimGraficos] = useState(formatarDataInput(new Date()));
 
       // Estado para nova transação
       const [novaTransacao, setNovaTransacao] = useState({
@@ -284,23 +279,16 @@
 
         switch (filtroTempo) {
           case 'dia':
-            // Hoje
-            inicio = new Date(hoje);
+            inicio = hoje;
             break;
           case 'semana':
-            // Semana atual (começando na segunda-feira)
-            inicio = new Date(hoje);
-            const diaSemana = inicio.getDay();
-            const diasParaSegunda = diaSemana === 0 ? 6 : diaSemana - 1;
-            inicio.setDate(inicio.getDate() - diasParaSegunda);
+            inicio.setDate(hoje.getDate() - 7);
             break;
           case 'mes':
-            // Mês atual (dia 1 até hoje)
-            inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+            inicio.setMonth(hoje.getMonth() - 1);
             break;
           case 'ano':
-            // Ano atual (1 de janeiro até hoje)
-            inicio = new Date(hoje.getFullYear(), 0, 1);
+            inicio.setFullYear(hoje.getFullYear() - 1);
             break;
           default:
             break;
@@ -309,30 +297,6 @@
         setDataInicio(formatarDataInput(inicio));
         setDataFim(formatarDataInput(hoje));
       }, [filtroTempo]);
-
-      // Obter label do período atual para exibição
-      const getLabelPeriodo = () => {
-        const hoje = new Date();
-        const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-                       'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-
-        switch (filtroTempo) {
-          case 'dia':
-            return `Hoje (${formatarData(hoje)})`;
-          case 'semana':
-            const inicio = new Date(hoje);
-            const diaSemana = inicio.getDay();
-            const diasParaSegunda = diaSemana === 0 ? 6 : diaSemana - 1;
-            inicio.setDate(inicio.getDate() - diasParaSegunda);
-            return `Semana Atual (${formatarData(inicio)} - ${formatarData(hoje)})`;
-          case 'mes':
-            return `${meses[hoje.getMonth()]}/${hoje.getFullYear()}`;
-          case 'ano':
-            return `Ano ${hoje.getFullYear()}`;
-          default:
-            return '';
-        }
-      };
 
       // Atualizar preço padrão ao selecionar produto
       useEffect(() => {
@@ -398,201 +362,6 @@
         return { porProduto, totais };
       }, [transacoesFiltradas, produtos]);
 
-      // Primeira e última data de transação
-      const datasLimites = useMemo(() => {
-        if (todasTransacoes.length === 0) return { primeira: null, ultima: null };
-        const datas = todasTransacoes.map(t => new Date(t.data));
-        const primeira = new Date(Math.min(...datas));
-        const ultima = new Date(Math.max(...datas));
-        return { primeira, ultima };
-      }, [todasTransacoes]);
-
-      // Inicializar datas da aba Gráficos quando houver dados
-      useEffect(() => {
-        if (datasLimites.primeira && !dataInicioGraficos) {
-          setDataInicioGraficos(formatarDataInput(datasLimites.primeira));
-        }
-      }, [datasLimites]);
-
-      // Transações filtradas para aba Gráficos (período personalizado)
-      const transacoesFiltradasGraficos = useMemo(() => {
-        if (!dataInicioGraficos || !dataFimGraficos) return todasTransacoes;
-        return todasTransacoes.filter(t => {
-          const dataTransacao = new Date(t.data);
-          const inicio = new Date(dataInicioGraficos);
-          const fim = new Date(dataFimGraficos);
-          fim.setHours(23, 59, 59);
-          return dataTransacao >= inicio && dataTransacao <= fim;
-        });
-      }, [todasTransacoes, dataInicioGraficos, dataFimGraficos]);
-
-      // Anos disponíveis nas transações
-      const anosDisponiveis = useMemo(() => {
-        const anos = new Set();
-        todasTransacoes.forEach(t => {
-          anos.add(new Date(t.data).getFullYear());
-        });
-        return Array.from(anos).sort((a, b) => b - a);
-      }, [todasTransacoes]);
-
-      // Inicializar anos de comparação quando houver dados
-      useEffect(() => {
-        if (anosDisponiveis.length > 0 && anosComparacao.length === 0) {
-          setAnosComparacao(anosDisponiveis.slice(0, 2));
-        }
-      }, [anosDisponiveis]);
-
-      // Dados de comparação anual
-      const dadosAnuais = useMemo(() => {
-        const porAno = {};
-
-        todasTransacoes.forEach(t => {
-          const ano = new Date(t.data).getFullYear();
-          if (!porAno[ano]) {
-            porAno[ano] = { ano, investido: 0, vendido: 0, lucro: 0 };
-          }
-          if (t.tipo === 'compra') {
-            porAno[ano].investido += t.valorTotal;
-          } else {
-            porAno[ano].vendido += t.valorTotal;
-          }
-          porAno[ano].lucro = porAno[ano].vendido - porAno[ano].investido;
-        });
-
-        return Object.values(porAno).sort((a, b) => a.ano - b.ano);
-      }, [todasTransacoes]);
-
-      // Dados mensais por ano (para comparativo)
-      const dadosMensaisPorAno = useMemo(() => {
-        const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-        const hoje = new Date();
-        const anoAtual = hoje.getFullYear();
-        const mesAtual = hoje.getMonth();
-
-        const dados = meses.map((mes, idx) => ({ mes, mesNum: idx }));
-
-        anosComparacao.forEach(ano => {
-          dados.forEach((d, idx) => {
-            // Para o ano atual, só inicializar meses que já passaram ou o mês atual
-            // Para anos futuros, não mostrar nada
-            if (ano > anoAtual || (ano === anoAtual && idx > mesAtual)) {
-              d[`lucro${ano}`] = null;
-              d[`investido${ano}`] = null;
-              d[`vendido${ano}`] = null;
-            } else {
-              d[`lucro${ano}`] = 0;
-              d[`investido${ano}`] = 0;
-              d[`vendido${ano}`] = 0;
-            }
-          });
-        });
-
-        todasTransacoes.forEach(t => {
-          const data = new Date(t.data);
-          const ano = data.getFullYear();
-          const mes = data.getMonth();
-
-          if (anosComparacao.includes(ano) && dados[mes][`lucro${ano}`] !== null) {
-            if (t.tipo === 'compra') {
-              dados[mes][`investido${ano}`] += t.valorTotal;
-            } else {
-              dados[mes][`vendido${ano}`] += t.valorTotal;
-            }
-            dados[mes][`lucro${ano}`] = dados[mes][`vendido${ano}`] - dados[mes][`investido${ano}`];
-          }
-        });
-
-        return dados;
-      }, [todasTransacoes, anosComparacao]);
-
-      // Insights anuais
-      const insightsAnuais = useMemo(() => {
-        if (dadosAnuais.length === 0) return null;
-
-        const melhorAnoLucro = dadosAnuais.reduce((a, b) => a.lucro > b.lucro ? a : b);
-        const melhorAnoInvestimento = dadosAnuais.reduce((a, b) => a.investido > b.investido ? a : b);
-
-        // Melhor mês (média de todos os anos)
-        const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-                       'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-        const lucroPorMes = Array(12).fill(0);
-        const contagemPorMes = Array(12).fill(0);
-
-        todasTransacoes.forEach(t => {
-          const mes = new Date(t.data).getMonth();
-          if (t.tipo === 'venda') {
-            lucroPorMes[mes] += t.valorTotal;
-          } else {
-            lucroPorMes[mes] -= t.valorTotal;
-          }
-          contagemPorMes[mes]++;
-        });
-
-        let melhorMesIdx = 0;
-        let melhorMesValor = lucroPorMes[0];
-        lucroPorMes.forEach((lucro, idx) => {
-          if (lucro > melhorMesValor) {
-            melhorMesValor = lucro;
-            melhorMesIdx = idx;
-          }
-        });
-
-        // Crescimento ano a ano
-        let crescimento = null;
-        if (dadosAnuais.length >= 2) {
-          const anoAnterior = dadosAnuais[dadosAnuais.length - 2];
-          const anoAtual = dadosAnuais[dadosAnuais.length - 1];
-          if (anoAnterior.lucro !== 0) {
-            crescimento = ((anoAtual.lucro - anoAnterior.lucro) / Math.abs(anoAnterior.lucro)) * 100;
-          }
-        }
-
-        return {
-          melhorAnoLucro,
-          melhorAnoInvestimento,
-          melhorMes: { nome: meses[melhorMesIdx], lucro: melhorMesValor },
-          crescimento,
-          anosComparados: dadosAnuais.length >= 2 ?
-            `${dadosAnuais[dadosAnuais.length - 2].ano}→${dadosAnuais[dadosAnuais.length - 1].ano}` : null
-        };
-      }, [dadosAnuais, todasTransacoes]);
-
-      // Cores para anos no gráfico
-      const coresAnos = ['#3b82f6', '#f97316', '#10b981', '#8b5cf6', '#ef4444'];
-
-      // Ranking de produtos por lucro e kg vendido
-      const rankingProdutos = useMemo(() => {
-        const produtos = Object.entries(consolidacoes.porProduto)
-          .filter(([_, dados]) => dados.valorVendido > 0 || dados.lucro !== 0)
-          .map(([id, dados]) => ({
-            id,
-            nome: dados.nome,
-            lucro: dados.lucro,
-            pesoVendido: dados.pesoVendido,
-          }));
-
-        const totalLucro = produtos.reduce((acc, p) => acc + Math.max(0, p.lucro), 0);
-        const totalPesoVendido = produtos.reduce((acc, p) => acc + p.pesoVendido, 0);
-
-        const porLucro = produtos
-          .filter(p => p.lucro > 0)
-          .sort((a, b) => b.lucro - a.lucro)
-          .map(p => ({
-            ...p,
-            percentual: totalLucro > 0 ? (p.lucro / totalLucro * 100) : 0,
-          }));
-
-        const porPeso = produtos
-          .filter(p => p.pesoVendido > 0)
-          .sort((a, b) => b.pesoVendido - a.pesoVendido)
-          .map(p => ({
-            ...p,
-            percentual: totalPesoVendido > 0 ? (p.pesoVendido / totalPesoVendido * 100) : 0,
-          }));
-
-        return { porLucro, porPeso, totalLucro, totalPesoVendido };
-      }, [consolidacoes]);
-
       // Dados para gráfico de barras
       const dadosBarras = useMemo(() => {
         return Object.entries(consolidacoes.porProduto)
@@ -639,71 +408,6 @@
             cor: CORES[index % CORES.length],
           }));
       }, [consolidacoes]);
-
-      // Dados para gráficos da aba Gráficos (período personalizado)
-      const dadosGraficosPersonalizado = useMemo(() => {
-        // Consolidação por produto
-        const porProduto = {};
-        produtos.forEach(p => {
-          porProduto[p.id] = {
-            nome: p.nome,
-            valorInvestido: 0,
-            valorVendido: 0,
-          };
-        });
-
-        transacoesFiltradasGraficos.forEach(t => {
-          if (porProduto[t.produtoId]) {
-            if (t.tipo === 'compra') {
-              porProduto[t.produtoId].valorInvestido += t.valorTotal;
-            } else {
-              porProduto[t.produtoId].valorVendido += t.valorTotal;
-            }
-          }
-        });
-
-        // Barras
-        const barras = Object.entries(porProduto)
-          .filter(([_, dados]) => dados.valorInvestido > 0 || dados.valorVendido > 0)
-          .map(([id, dados]) => ({
-            nome: dados.nome.split(' ')[0],
-            Investido: dados.valorInvestido,
-            Vendido: dados.valorVendido,
-          }));
-
-        // Linha (evolução do lucro)
-        const lucrosPorData = {};
-        transacoesFiltradasGraficos
-          .sort((a, b) => new Date(a.data) - new Date(b.data))
-          .forEach(t => {
-            const dataStr = formatarData(t.data);
-            if (!lucrosPorData[dataStr]) {
-              lucrosPorData[dataStr] = 0;
-            }
-            if (t.tipo === 'venda') {
-              lucrosPorData[dataStr] += t.valorTotal;
-            } else {
-              lucrosPorData[dataStr] -= t.valorTotal;
-            }
-          });
-
-        let lucroAcumulado = 0;
-        const linha = Object.entries(lucrosPorData).map(([data, valor]) => {
-          lucroAcumulado += valor;
-          return { data, lucro: lucroAcumulado };
-        });
-
-        // Pizza
-        const pizza = Object.entries(porProduto)
-          .filter(([_, dados]) => dados.valorVendido > 0)
-          .map(([id, dados], index) => ({
-            nome: dados.nome,
-            valor: dados.valorVendido,
-            cor: CORES[index % CORES.length],
-          }));
-
-        return { barras, linha, pizza };
-      }, [transacoesFiltradasGraficos, produtos]);
 
       // Handlers
       const handleRegistrarTransacao = async (e) => {
@@ -938,9 +642,8 @@
                 { id: 'dashboard', label: '📊 Dashboard' },
                 { id: 'registro', label: '➕ Registrar' },
                 { id: 'transacoes', label: '📋 Transações' },
-                { id: 'produtos', label: '⚙️ Produtos' },
-                { id: 'historico', label: '📅 Histórico' },
                 { id: 'graficos', label: '📈 Gráficos' },
+                { id: 'produtos', label: '⚙️ Produtos' },
               ].map(aba => (
                 <button
                   key={aba.id}
@@ -961,51 +664,14 @@
             {/* Dashboard */}
             {abaAtiva === 'dashboard' && (
               <div className="space-y-6">
-                {/* Card Principal de Lucratividade com Rankings */}
-                <div className={`rounded-2xl p-6 shadow-lg ${lucrativo ? 'bg-gradient-to-br from-green-500 to-green-600' : 'bg-gradient-to-br from-red-500 to-red-600'} text-white`}>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {/* Coluna 1: Status de Lucratividade */}
-                    <div className="text-center md:border-r md:border-white/30 md:pr-6">
-                      <p className="text-sm font-bold opacity-90 uppercase tracking-wide">O negócio está lucrativo?</p>
-                      <p className="text-4xl font-bold my-2">{lucrativo ? '✅ SIM' : '❌ NÃO'}</p>
-                      <p className="text-2xl font-semibold">
-                        {lucrativo ? 'Lucro: ' : 'Prejuízo: '}{formatarMoeda(Math.abs(consolidacoes.totais.lucro))}
-                      </p>
-                    </div>
-
-                    {/* Coluna 2: Ranking por Lucro */}
-                    <div className="md:border-r md:border-white/30 md:pr-6">
-                      <p className="text-sm font-bold opacity-90 uppercase tracking-wide mb-2">% Participação no Lucro</p>
-                      {rankingProdutos.porLucro.length > 0 ? (
-                        <div className="space-y-1">
-                          {rankingProdutos.porLucro.slice(0, 4).map((p, idx) => (
-                            <div key={p.id} className="flex justify-between items-center text-sm">
-                              <span className="truncate mr-2">{idx + 1}. {p.nome}</span>
-                              <span className="font-bold whitespace-nowrap">{p.percentual.toFixed(1)}%</span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-sm opacity-70">Sem vendas no período</p>
-                      )}
-                    </div>
-
-                    {/* Coluna 3: Ranking por Peso Vendido */}
-                    <div>
-                      <p className="text-sm font-bold opacity-90 uppercase tracking-wide mb-2">% Participação em Vendas (kg)</p>
-                      {rankingProdutos.porPeso.length > 0 ? (
-                        <div className="space-y-1">
-                          {rankingProdutos.porPeso.slice(0, 4).map((p, idx) => (
-                            <div key={p.id} className="flex justify-between items-center text-sm">
-                              <span className="truncate mr-2">{idx + 1}. {p.nome}</span>
-                              <span className="font-bold whitespace-nowrap">{p.percentual.toFixed(1)}%</span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-sm opacity-70">Sem vendas no período</p>
-                      )}
-                    </div>
+                {/* Card Principal de Lucratividade */}
+                <div className={`rounded-2xl p-6 shadow-lg ${lucrativo ? 'bg-green-500' : 'bg-red-500'} text-white`}>
+                  <div className="text-center">
+                    <p className="text-lg opacity-90">O negócio está lucrativo?</p>
+                    <p className="text-5xl font-bold my-2">{lucrativo ? '✅ SIM' : '❌ NÃO'}</p>
+                    <p className="text-3xl font-semibold">
+                      {lucrativo ? 'Lucro: ' : 'Prejuízo: '}{formatarMoeda(Math.abs(consolidacoes.totais.lucro))}
+                    </p>
                   </div>
                 </div>
 
@@ -1026,7 +692,21 @@
                         {periodo === 'dia' ? 'Hoje' : periodo === 'semana' ? 'Semana' : periodo === 'mes' ? 'Mês' : 'Ano'}
                       </button>
                     ))}
-                    <span className="ml-auto text-sm text-gray-500 font-medium">{getLabelPeriodo()}</span>
+                    <div className="flex gap-2 ml-auto flex-wrap">
+                      <input
+                        type="date"
+                        value={dataInicio}
+                        onChange={(e) => setDataInicio(e.target.value)}
+                        className="px-3 py-2 border rounded-lg text-sm"
+                      />
+                      <span className="self-center text-gray-500">até</span>
+                      <input
+                        type="date"
+                        value={dataFim}
+                        onChange={(e) => setDataFim(e.target.value)}
+                        className="px-3 py-2 border rounded-lg text-sm"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -1054,15 +734,7 @@
                 {/* Tabela de Consolidação por Produto */}
                 <div className="bg-white rounded-xl shadow overflow-hidden">
                   <div className="p-4 border-b">
-                    <h2 className="text-lg font-semibold text-gray-800">
-                      Consolidação por Produto - {
-                        filtroTempo === 'dia' ? 'Hoje' :
-                        filtroTempo === 'semana' ? 'Última Semana' :
-                        filtroTempo === 'mes' ? 'Último Mês' :
-                        filtroTempo === 'ano' ? 'Último Ano' :
-                        `${formatarData(dataInicio)} a ${formatarData(dataFim)}`
-                      }
-                    </h2>
+                    <h2 className="text-lg font-semibold text-gray-800">Consolidação por Produto</h2>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full">
@@ -1107,219 +779,6 @@
                     </table>
                   </div>
                 </div>
-              </div>
-            )}
-
-            {/* Aba Histórico - Análise Comparativa */}
-            {abaAtiva === 'historico' && (
-              <div className="space-y-6">
-                <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-6 shadow-lg text-white">
-                  <h1 className="text-2xl font-bold">📅 Histórico e Comparativos</h1>
-                  <p className="opacity-90">Análise comparativa entre anos e meses</p>
-                </div>
-
-                {anosDisponiveis.length > 0 ? (
-                  <>
-                    {/* Seletor de Anos */}
-                    <div className="bg-white rounded-xl p-4 shadow">
-                      <div className="flex flex-wrap gap-2 items-center">
-                        <span className="font-medium text-gray-700">Comparar anos:</span>
-                        {anosDisponiveis.map(ano => (
-                          <button
-                            key={ano}
-                            onClick={() => {
-                              if (anosComparacao.includes(ano)) {
-                                setAnosComparacao(anosComparacao.filter(a => a !== ano));
-                              } else {
-                                setAnosComparacao([...anosComparacao, ano].sort((a, b) => a - b));
-                              }
-                            }}
-                            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                              anosComparacao.includes(ano)
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                          >
-                            {ano}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Cards de Insights */}
-                    {insightsAnuais && (
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 border border-green-200">
-                          <p className="text-green-700 text-sm font-medium">🏆 Ano Mais Lucrativo</p>
-                          <p className="text-2xl font-bold text-green-800">{insightsAnuais.melhorAnoLucro.ano}</p>
-                          <p className="text-sm text-green-600">{formatarMoeda(insightsAnuais.melhorAnoLucro.lucro)}</p>
-                        </div>
-                        <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-4 border border-orange-200">
-                          <p className="text-orange-700 text-sm font-medium">💰 Maior Investimento</p>
-                          <p className="text-2xl font-bold text-orange-800">{insightsAnuais.melhorAnoInvestimento.ano}</p>
-                          <p className="text-sm text-orange-600">{formatarMoeda(insightsAnuais.melhorAnoInvestimento.investido)}</p>
-                        </div>
-                        <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border border-purple-200">
-                          <p className="text-purple-700 text-sm font-medium">📅 Mês Mais Lucrativo</p>
-                          <p className="text-2xl font-bold text-purple-800">{insightsAnuais.melhorMes.nome}</p>
-                          <p className="text-sm text-purple-600">{formatarMoeda(insightsAnuais.melhorMes.lucro)}</p>
-                        </div>
-                        {insightsAnuais.crescimento !== null && (
-                          <div className={`bg-gradient-to-br ${insightsAnuais.crescimento >= 0 ? 'from-blue-50 to-blue-100 border-blue-200' : 'from-red-50 to-red-100 border-red-200'} rounded-xl p-4 border`}>
-                            <p className={`${insightsAnuais.crescimento >= 0 ? 'text-blue-700' : 'text-red-700'} text-sm font-medium`}>
-                              📈 Crescimento {insightsAnuais.anosComparados}
-                            </p>
-                            <p className={`text-2xl font-bold ${insightsAnuais.crescimento >= 0 ? 'text-blue-800' : 'text-red-800'}`}>
-                              {insightsAnuais.crescimento >= 0 ? '+' : ''}{insightsAnuais.crescimento.toFixed(1)}%
-                            </p>
-                            <p className={`text-sm ${insightsAnuais.crescimento >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
-                              {insightsAnuais.crescimento >= 0 ? 'Lucro aumentou' : 'Lucro diminuiu'}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Gráfico Comparativo Anual */}
-                    <div className="bg-white rounded-xl p-6 shadow">
-                      <h3 className="text-lg font-semibold text-gray-800 mb-4">Resultado por Ano</h3>
-                      {dadosAnuais.length > 0 ? (
-                        <ResponsiveContainer width="100%" height={280}>
-                          <BarChart data={dadosAnuais}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="ano" />
-                            <YAxis tickFormatter={(v) => `R$${(v/1000).toFixed(0)}k`} />
-                            <Tooltip formatter={(v) => formatarMoeda(v)} />
-                            <Legend />
-                            <Bar dataKey="investido" name="Investido" fill="#f97316" />
-                            <Bar dataKey="vendido" name="Vendido" fill="#3b82f6" />
-                            <Bar dataKey="lucro" name="Lucro" fill="#10b981" />
-                          </BarChart>
-                        </ResponsiveContainer>
-                      ) : (
-                        <p className="text-center text-gray-500 py-8">Nenhum dado disponível</p>
-                      )}
-                    </div>
-
-                    {/* Gráfico Comparativo Mensal */}
-                    {anosComparacao.length > 0 && (
-                      <div className="bg-white rounded-xl p-6 shadow">
-                        <h3 className="text-lg font-semibold text-gray-800 mb-2">Lucro Mensal - Comparativo entre Anos</h3>
-                        <p className="text-sm text-gray-500 mb-4">Comparando apenas meses que já ocorreram em todos os anos selecionados</p>
-                        <ResponsiveContainer width="100%" height={300}>
-                          <LineChart data={dadosMensaisPorAno}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="mes" />
-                            <YAxis tickFormatter={(v) => `R$${(v/1000).toFixed(0)}k`} />
-                            <Tooltip formatter={(v) => formatarMoeda(v)} />
-                            <Legend />
-                            {anosComparacao.map((ano, idx) => (
-                              <Line
-                                key={ano}
-                                type="monotone"
-                                dataKey={`lucro${ano}`}
-                                name={`Lucro ${ano}`}
-                                stroke={coresAnos[idx % coresAnos.length]}
-                                strokeWidth={2}
-                                dot={{ r: 4 }}
-                                connectNulls={false}
-                              />
-                            ))}
-                          </LineChart>
-                        </ResponsiveContainer>
-                      </div>
-                    )}
-
-                    {/* Tabela Comparativa por Ano */}
-                    <div className="bg-white rounded-xl shadow overflow-hidden">
-                      <div className="p-4 border-b">
-                        <h3 className="text-lg font-semibold text-gray-800">Resumo por Ano</h3>
-                      </div>
-                      <div className="overflow-x-auto">
-                        <table className="w-full">
-                          <thead className="bg-gray-50">
-                            <tr>
-                              <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Ano</th>
-                              <th className="px-4 py-3 text-right text-sm font-medium text-gray-600">Investido</th>
-                              <th className="px-4 py-3 text-right text-sm font-medium text-gray-600">Vendido</th>
-                              <th className="px-4 py-3 text-right text-sm font-medium text-gray-600">Lucro</th>
-                              <th className="px-4 py-3 text-right text-sm font-medium text-gray-600">Margem</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-100">
-                            {dadosAnuais.map(d => (
-                              <tr key={d.ano} className="hover:bg-gray-50">
-                                <td className="px-4 py-3 text-sm font-bold text-gray-800">{d.ano}</td>
-                                <td className="px-4 py-3 text-sm text-right text-orange-600">{formatarMoeda(d.investido)}</td>
-                                <td className="px-4 py-3 text-sm text-right text-blue-600">{formatarMoeda(d.vendido)}</td>
-                                <td className={`px-4 py-3 text-sm text-right font-semibold ${d.lucro >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                  {formatarMoeda(d.lucro)}
-                                </td>
-                                <td className={`px-4 py-3 text-sm text-right ${d.vendido > 0 ? (d.lucro/d.vendido*100 >= 0 ? 'text-green-600' : 'text-red-600') : 'text-gray-400'}`}>
-                                  {d.vendido > 0 ? `${(d.lucro/d.vendido*100).toFixed(1)}%` : '-'}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-
-                    {/* Tabela Comparativa Mensal Detalhada */}
-                    {anosComparacao.length > 0 && (
-                      <div className="bg-white rounded-xl shadow overflow-hidden">
-                        <div className="p-4 border-b">
-                          <h3 className="text-lg font-semibold text-gray-800">Comparativo Mensal Detalhado</h3>
-                        </div>
-                        <div className="overflow-x-auto">
-                          <table className="w-full">
-                            <thead className="bg-gray-50">
-                              <tr>
-                                <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Mês</th>
-                                {anosComparacao.map(ano => (
-                                  <th key={ano} className="px-4 py-3 text-right text-sm font-medium text-gray-600">Lucro {ano}</th>
-                                ))}
-                                {anosComparacao.length === 2 && (
-                                  <th className="px-4 py-3 text-right text-sm font-medium text-gray-600">Variação</th>
-                                )}
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                              {dadosMensaisPorAno.filter(d => {
-                                // Só mostrar meses que têm dados em pelo menos um ano
-                                return anosComparacao.some(ano => d[`lucro${ano}`] !== 0 || d[`investido${ano}`] !== 0 || d[`vendido${ano}`] !== 0);
-                              }).map(d => {
-                                const variacao = anosComparacao.length === 2 && d[`lucro${anosComparacao[0]}`] !== 0
-                                  ? ((d[`lucro${anosComparacao[1]}`] - d[`lucro${anosComparacao[0]}`]) / Math.abs(d[`lucro${anosComparacao[0]}`])) * 100
-                                  : null;
-                                return (
-                                  <tr key={d.mes} className="hover:bg-gray-50">
-                                    <td className="px-4 py-3 text-sm font-medium text-gray-800">{d.mes}</td>
-                                    {anosComparacao.map(ano => (
-                                      <td key={ano} className={`px-4 py-3 text-sm text-right ${d[`lucro${ano}`] >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                        {d[`lucro${ano}`] !== 0 ? formatarMoeda(d[`lucro${ano}`]) : '-'}
-                                      </td>
-                                    ))}
-                                    {anosComparacao.length === 2 && (
-                                      <td className={`px-4 py-3 text-sm text-right font-medium ${variacao !== null ? (variacao >= 0 ? 'text-green-600' : 'text-red-600') : 'text-gray-400'}`}>
-                                        {variacao !== null ? `${variacao >= 0 ? '+' : ''}${variacao.toFixed(1)}%` : '-'}
-                                      </td>
-                                    )}
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="bg-white rounded-xl p-8 shadow text-center">
-                    <p className="text-gray-500">Nenhum dado histórico disponível ainda.</p>
-                    <p className="text-sm text-gray-400 mt-2">Registre transações para ver a análise comparativa.</p>
-                  </div>
-                )}
               </div>
             )}
 
@@ -1523,37 +982,32 @@
             {/* Gráficos */}
             {abaAtiva === 'graficos' && (
               <div className="space-y-6">
-                {/* Filtros de Período Personalizado */}
+                {/* Filtros de Período */}
                 <div className="bg-white rounded-xl p-4 shadow">
-                  <div className="flex flex-wrap gap-4 items-center">
+                  <div className="flex flex-wrap gap-2 items-center">
                     <span className="font-medium text-gray-700">Período:</span>
-                    <div className="flex gap-2 items-center flex-wrap">
-                      <input
-                        type="date"
-                        value={dataInicioGraficos}
-                        onChange={(e) => setDataInicioGraficos(e.target.value)}
-                        className="px-3 py-2 border rounded-lg text-sm"
-                      />
-                      <span className="text-gray-500">até</span>
-                      <input
-                        type="date"
-                        value={dataFimGraficos}
-                        onChange={(e) => setDataFimGraficos(e.target.value)}
-                        className="px-3 py-2 border rounded-lg text-sm"
-                      />
-                    </div>
-                    <span className="text-sm text-gray-500 ml-auto">
-                      {transacoesFiltradasGraficos.length} transações no período
-                    </span>
+                    {['dia', 'semana', 'mes', 'ano'].map(periodo => (
+                      <button
+                        key={periodo}
+                        onClick={() => setFiltroTempo(periodo)}
+                        className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                          filtroTempo === periodo
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        {periodo === 'dia' ? 'Hoje' : periodo === 'semana' ? 'Semana' : periodo === 'mes' ? 'Mês' : 'Ano'}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
                 {/* Gráfico de Barras */}
                 <div className="bg-white rounded-xl p-6 shadow">
                   <h3 className="text-lg font-semibold text-gray-800 mb-4">Investido vs Vendido por Produto</h3>
-                  {dadosGraficosPersonalizado.barras.length > 0 ? (
+                  {dadosBarras.length > 0 ? (
                     <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={dadosGraficosPersonalizado.barras}>
+                      <BarChart data={dadosBarras}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="nome" />
                         <YAxis tickFormatter={(v) => `R$${v}`} />
@@ -1570,10 +1024,10 @@
 
                 {/* Gráfico de Linha */}
                 <div className="bg-white rounded-xl p-6 shadow">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Evolução do Lucro Acumulado</h3>
-                  {dadosGraficosPersonalizado.linha.length > 0 ? (
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Evolução do Lucro</h3>
+                  {dadosLinha.length > 0 ? (
                     <ResponsiveContainer width="100%" height={300}>
-                      <LineChart data={dadosGraficosPersonalizado.linha}>
+                      <LineChart data={dadosLinha}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="data" />
                         <YAxis tickFormatter={(v) => `R$${v}`} />
@@ -1597,11 +1051,11 @@
                 {/* Gráfico de Pizza */}
                 <div className="bg-white rounded-xl p-6 shadow">
                   <h3 className="text-lg font-semibold text-gray-800 mb-4">Distribuição de Vendas por Produto</h3>
-                  {dadosGraficosPersonalizado.pizza.length > 0 ? (
+                  {dadosPizza.length > 0 ? (
                     <ResponsiveContainer width="100%" height={300}>
                       <PieChart>
                         <Pie
-                          data={dadosGraficosPersonalizado.pizza}
+                          data={dadosPizza}
                           cx="50%"
                           cy="50%"
                           labelLine={false}
@@ -1610,7 +1064,7 @@
                           fill="#8884d8"
                           dataKey="valor"
                         >
-                          {dadosGraficosPersonalizado.pizza.map((entry, index) => (
+                          {dadosPizza.map((entry, index) => (
                             <Cell key={`cell-${index}`} fill={entry.cor} />
                           ))}
                         </Pie>
@@ -1727,7 +1181,7 @@
           {/* Footer */}
           <footer className="bg-gray-800 text-white p-4 mt-8">
             <div className="max-w-6xl mx-auto text-center text-sm">
-              <p>Pescados do Alexandre © 2026</p>
+              <p>Pescados do Alexandre © 2024</p>
               <p className="text-gray-400">Controle de Estoque e Lucratividade</p>
             </div>
           </footer>

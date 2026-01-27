@@ -37,14 +37,18 @@ if errorlevel 1 (
 )
 
 echo [3/4] Compilando executavel...
+
+REM Adicionando favicon.ico ao build (opcional, se existir)
+if exist "favicon.ico" (
+    set FAVICON_ARG=--add-data "favicon.ico;." ^
+) else (
+    set FAVICON_ARG=
+)
 pyinstaller --noconfirm --onefile --windowed ^
     --name "PescadosAlexandre" ^
     --icon "Alexandre.ico" ^
-    --add-data "index.html;." ^
-    --add-data "manifest.json;." ^
-    --add-data "sw.js;." ^
-    --add-data "icon-192.png;." ^
-    --add-data "icon-512.png;." ^
+    --add-data "frontend;frontend" ^
+    %FAVICON_ARG% ^
     --hidden-import "flask" ^
     --hidden-import "flask_cors" ^
     --hidden-import "werkzeug" ^
@@ -67,12 +71,11 @@ REM Copiar executavel
 copy "dist\PescadosAlexandre.exe" "PescadosAlexandre_Instalador\"
 
 REM Copiar arquivos necessarios
-copy "index.html" "PescadosAlexandre_Instalador\"
-copy "manifest.json" "PescadosAlexandre_Instalador\"
-copy "sw.js" "PescadosAlexandre_Instalador\"
-copy "icon-192.png" "PescadosAlexandre_Instalador\"
-copy "icon-512.png" "PescadosAlexandre_Instalador\"
+
+mkdir "PescadosAlexandre_Instalador\frontend"
+robocopy "frontend" "PescadosAlexandre_Instalador\frontend" /E >nul
 copy "Alexandre.ico" "PescadosAlexandre_Instalador\"
+if exist "favicon.ico" copy "favicon.ico" "PescadosAlexandre_Instalador\"
 
 REM Criar arquivo README
 echo Pescados do Alexandre - Instrucoes > "PescadosAlexandre_Instalador\LEIA-ME.txt"
