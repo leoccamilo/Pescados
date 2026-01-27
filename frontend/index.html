@@ -46,6 +46,9 @@
     // URL base da API - detecta automaticamente o host
     const API_URL = window.location.origin + '/api';
 
+    // Detectar se estamos no servidor local (notebook) ou remoto (celular)
+    const IS_LOCAL_SERVER = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+
     // Chaves do localStorage para modo offline
     const STORAGE_KEYS = {
       PENDING_TRANSACTIONS: 'pescados_pending_transactions',
@@ -95,38 +98,69 @@
 
       // Estados para modo offline
       const [isOnline, setIsOnline] = useState(navigator.onLine);
+      const [serverAvailable, setServerAvailable] = useState(true);
       const [pendingTransactions, setPendingTransactions] = useState(() =>
-        storage.get(STORAGE_KEYS.PENDING_TRANSACTIONS) || []
+        // Só carregar pendentes se não estivermos no servidor local
+        IS_LOCAL_SERVER ? [] : (storage.get(STORAGE_KEYS.PENDING_TRANSACTIONS) || [])
       );
       const [sincronizando, setSincronizando] = useState(false);
       const [ultimaSync, setUltimaSync] = useState(null);
       const syncIntervalRef = useRef(null);
 
+      // Verificar se o servidor está disponível (ping real)
+      const checkServerAvailability = useCallback(async () => {
+        try {
+          const res = await fetch(`${API_URL}/produtos`, {
+            method: 'GET',
+            cache: 'no-store'
+          });
+          setServerAvailable(res.ok);
+          return res.ok;
+        } catch {
+          setServerAvailable(false);
+          return false;
+        }
+      }, []);
+
       // Monitorar status de conexao
       useEffect(() => {
-        const handleOnline = () => {
+        const handleOnline = async () => {
           setIsOnline(true);
-          // Tentar sincronizar quando voltar online
-          sincronizarPendentes();
+          // Verificar se servidor está disponível e sincronizar
+          const available = await checkServerAvailability();
+          if (available && !IS_LOCAL_SERVER) {
+            sincronizarPendentes();
+          }
         };
-        const handleOffline = () => setIsOnline(false);
+        const handleOffline = () => {
+          setIsOnline(false);
+          setServerAvailable(false);
+        };
 
         window.addEventListener('online', handleOnline);
         window.addEventListener('offline', handleOffline);
+
+        // Verificar disponibilidade inicial
+        if (navigator.onLine) {
+          checkServerAvailability();
+        }
 
         return () => {
           window.removeEventListener('online', handleOnline);
           window.removeEventListener('offline', handleOffline);
         };
-      }, []);
+      }, [checkServerAvailability]);
 
-      // Salvar transacoes pendentes no localStorage
+      // Salvar transacoes pendentes no localStorage (apenas no celular)
       useEffect(() => {
-        storage.set(STORAGE_KEYS.PENDING_TRANSACTIONS, pendingTransactions);
+        if (!IS_LOCAL_SERVER) {
+          storage.set(STORAGE_KEYS.PENDING_TRANSACTIONS, pendingTransactions);
+        }
       }, [pendingTransactions]);
 
       // Sincronizar transacoes pendentes com o servidor
       const sincronizarPendentes = useCallback(async () => {
+        if (IS_LOCAL_SERVER) return; // Não sincronizar no servidor local
         if (pendingTransactions.length === 0 || sincronizando) return;
 
         setSincronizando(true);
@@ -136,10 +170,12 @@
 
         for (const transacao of pendentes) {
           try {
+            // Remover campos temporários antes de enviar
+            const { tempId, criadoEm, pendente, ...dadosTransacao } = transacao;
             const res = await fetch(`${API_URL}/transacoes`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(transacao),
+              body: JSON.stringify(dadosTransacao),
             });
 
             if (res.ok) {
@@ -153,35 +189,47 @@
           }
         }
 
-        // Atualizar estado com transacoes sincronizadas
-        if (sincronizadas.length > 0) {
-          setTransacoes(prev => {
-            // Remover transacoes temporarias e adicionar as reais
-            const semTemporarias = prev.filter(t =>
-              !sincronizadas.some(s => s.temp.tempId === t.tempId)
-            );
-            const novasTransacoes = sincronizadas.map(s => s.salva);
-            return [...novasTransacoes, ...semTemporarias].sort((a, b) =>
-              new Date(b.data) - new Date(a.data)
-            );
-          });
-        }
-
         // Manter apenas as que falharam
         setPendingTransactions(erros);
-        setSincronizando(false);
 
+        // Se sincronizou alguma, recarregar todos os dados do servidor
+        // Isso garante que o celular veja também transações feitas no notebook
         if (sincronizadas.length > 0) {
+          try {
+            const [resProdutos, resTransacoes] = await Promise.all([
+              fetch(`${API_URL}/produtos`),
+              fetch(`${API_URL}/transacoes`)
+            ]);
+
+            if (resProdutos.ok && resTransacoes.ok) {
+              const produtosData = await resProdutos.json();
+              const transacoesData = await resTransacoes.json();
+              setProdutos(produtosData);
+              setTransacoes(transacoesData);
+              storage.set(STORAGE_KEYS.CACHED_PRODUCTS, produtosData);
+              storage.set(STORAGE_KEYS.CACHED_TRANSACTIONS, transacoesData);
+            }
+          } catch (err) {
+            console.log('Erro ao recarregar dados após sync:', err);
+          }
           setUltimaSync(new Date());
         }
+
+        setSincronizando(false);
       }, [pendingTransactions, sincronizando]);
 
-      // Tentar sincronizar periodicamente quando online
+      // Tentar sincronizar periodicamente quando online (apenas no celular)
       useEffect(() => {
+        if (IS_LOCAL_SERVER) return; // Não precisa de sync no servidor local
+
         if (isOnline && pendingTransactions.length > 0) {
-          syncIntervalRef.current = setInterval(() => {
-            sincronizarPendentes();
-          }, 30000); // Tentar a cada 30 segundos
+          // Verificar servidor e sincronizar a cada 15 segundos
+          syncIntervalRef.current = setInterval(async () => {
+            const available = await checkServerAvailability();
+            if (available) {
+              sincronizarPendentes();
+            }
+          }, 15000);
         }
 
         return () => {
@@ -189,7 +237,7 @@
             clearInterval(syncIntervalRef.current);
           }
         };
-      }, [isOnline, pendingTransactions.length, sincronizarPendentes]);
+      }, [isOnline, pendingTransactions.length, sincronizarPendentes, checkServerAvailability]);
 
       // Carregar dados da API ao iniciar
       const carregarDados = useCallback(async () => {
@@ -438,29 +486,34 @@
           });
         };
 
-        // Se estiver online, tentar enviar diretamente
-        if (isOnline) {
-          try {
-            const res = await fetch(`${API_URL}/transacoes`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(transacao),
-            });
+        // Tentar enviar para o servidor
+        try {
+          const res = await fetch(`${API_URL}/transacoes`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(transacao),
+          });
 
-            if (res.ok) {
-              const novaTransacaoSalva = await res.json();
-              setTransacoes(prev => [novaTransacaoSalva, ...prev]);
-              // Atualizar cache
-              storage.set(STORAGE_KEYS.CACHED_TRANSACTIONS, [novaTransacaoSalva, ...transacoes]);
-              limparFormulario();
-              return;
-            }
-          } catch (err) {
-            console.log('Falha ao enviar online, salvando localmente...');
+          if (res.ok) {
+            const novaTransacaoSalva = await res.json();
+            setTransacoes(prev => [novaTransacaoSalva, ...prev]);
+            // Atualizar cache
+            storage.set(STORAGE_KEYS.CACHED_TRANSACTIONS, [novaTransacaoSalva, ...transacoes]);
+            limparFormulario();
+            return;
           }
+        } catch (err) {
+          console.log('Falha ao enviar para servidor:', err.message);
         }
 
-        // Se offline ou falhou, salvar localmente
+        // Se estamos no servidor local (notebook), não usar fila de pendentes
+        // Apenas mostrar erro - o servidor deveria estar sempre disponível localmente
+        if (IS_LOCAL_SERVER) {
+          alert('Erro ao salvar transação. Verifique se o servidor está rodando.');
+          return;
+        }
+
+        // Se estamos no celular (remoto), salvar localmente para sincronizar depois
         const transacaoLocal = {
           ...transacao,
           tempId: `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -597,23 +650,27 @@
 
       return (
         <div className="min-h-screen bg-gray-100">
-          {/* Barra de Status Offline/Sync */}
-          {(!isOnline || pendingTransactions.length > 0) && (
+          {/* Barra de Status Offline/Sync - só aparece no celular (acesso remoto) */}
+          {!IS_LOCAL_SERVER && (!isOnline || !serverAvailable || pendingTransactions.length > 0) && (
             <div className={`px-4 py-2 text-center text-sm font-medium ${
-              !isOnline ? 'bg-yellow-500 text-yellow-900' : 'bg-orange-500 text-white'
+              !isOnline ? 'bg-yellow-500 text-yellow-900' :
+              !serverAvailable ? 'bg-red-500 text-white' :
+              'bg-orange-500 text-white'
             }`}>
               {!isOnline ? (
-                <span>📴 Modo Offline - Transações serão sincronizadas quando conectar</span>
+                <span>📴 Sem internet - Transações serão sincronizadas quando conectar</span>
+              ) : !serverAvailable ? (
+                <span>🔌 Servidor indisponível - Ligue o notebook para sincronizar ({pendingTransactions.length} pendente{pendingTransactions.length !== 1 ? 's' : ''})</span>
               ) : sincronizando ? (
                 <span>🔄 Sincronizando {pendingTransactions.length} transação(ões)...</span>
-              ) : (
+              ) : pendingTransactions.length > 0 ? (
                 <span
                   onClick={sincronizarPendentes}
                   className="cursor-pointer hover:underline"
                 >
                   ⏳ {pendingTransactions.length} transação(ões) pendente(s) - Toque para sincronizar
                 </span>
-              )}
+              ) : null}
             </div>
           )}
 
@@ -625,12 +682,25 @@
                 <p className="text-blue-100 text-sm">Controle de Estoque e Lucratividade</p>
               </div>
               <div className="text-right">
-                <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm ${
-                  isOnline ? 'bg-green-500' : 'bg-yellow-500 text-yellow-900'
-                }`}>
-                  <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-white' : 'bg-yellow-900'}`}></span>
-                  {isOnline ? 'Online' : 'Offline'}
-                </div>
+                {IS_LOCAL_SERVER ? (
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm bg-blue-500">
+                    <span className="w-2 h-2 rounded-full bg-white"></span>
+                    Servidor Local
+                  </div>
+                ) : (
+                  <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm ${
+                    !isOnline ? 'bg-yellow-500 text-yellow-900' :
+                    !serverAvailable ? 'bg-red-500' :
+                    pendingTransactions.length > 0 ? 'bg-orange-500' :
+                    'bg-green-500'
+                  }`}>
+                    <span className={`w-2 h-2 rounded-full ${!isOnline ? 'bg-yellow-900' : 'bg-white'}`}></span>
+                    {!isOnline ? 'Sem Internet' :
+                     !serverAvailable ? 'Servidor Off' :
+                     pendingTransactions.length > 0 ? `${pendingTransactions.length} pendente(s)` :
+                     'Sincronizado'}
+                  </div>
+                )}
               </div>
             </div>
           </header>
