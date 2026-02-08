@@ -305,8 +305,17 @@ def main() -> None:
     st.markdown(
         """
         <style>
+        body {
+            background-color: #f6f8fb;
+        }
         .stApp {
-            background: radial-gradient(1200px 600px at 10% 0%, #f9fbff 0%, #eef6ff 45%, #f5fff8 100%);
+            background-color: #f6f8fb;
+        }
+        .main .block-container {
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 2rem 2.5rem 3rem 2.5rem;
+            box-shadow: 0 10px 30px rgba(20, 60, 120, 0.08);
         }
         .kpi-card {
             background: white;
