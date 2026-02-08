@@ -65,7 +65,24 @@ def rows_to_dicts(cursor, rows):
     if isinstance(rows[0], sqlite3.Row):
         return [dict(row) for row in rows]
     cols = [c[0] for c in cursor.description]
-    return [dict(zip(cols, row)) for row in rows]
+    mapped = []
+    key_map = {
+        "precocomprapadrao": "precoCompraPadrao",
+        "precovendapadrao": "precoVendaPadrao",
+        "produtoid": "produtoId",
+        "pesokg": "pesoKg",
+        "precokg": "precoKg",
+        "valortotal": "valorTotal",
+        "produtonome": "produtoNome",
+    }
+    for row in rows:
+        d = dict(zip(cols, row))
+        fixed = {}
+        for k, v in d.items():
+            nk = key_map.get(k, k)
+            fixed[nk] = v
+        mapped.append(fixed)
+    return mapped
 
 
 def init_db() -> None:
