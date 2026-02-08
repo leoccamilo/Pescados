@@ -317,6 +317,16 @@ def main() -> None:
             padding: 2rem 2.5rem 3rem 2.5rem;
             box-shadow: 0 10px 30px rgba(20, 60, 120, 0.08);
         }
+        h1, h2, h3, h4, h5, h6, p, span, label {
+            color: #1f2a44;
+        }
+        .stTabs [data-baseweb="tab"] {
+            color: #1f2a44;
+        }
+        .stTabs [aria-selected="true"] {
+            color: #1f2a44;
+            border-bottom: 2px solid #2a5bd7;
+        }
         /* Multiselect tags */
         .stMultiSelect [data-baseweb="tag"] {
             background-color: #e8f1ff !important;
