@@ -168,7 +168,7 @@ def get_transacoes() -> List[Dict[str, Any]]:
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT t.*, p.nome AS produtoNome
+            SELECT t.*, p.nome AS "produtoNome"
             FROM transacoes t
             JOIN produtos p ON p.id = t.produtoId
             ORDER BY t.data DESC, t.id DESC
