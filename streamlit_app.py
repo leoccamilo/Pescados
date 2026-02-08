@@ -317,6 +317,15 @@ def main() -> None:
             padding: 2rem 2.5rem 3rem 2.5rem;
             box-shadow: 0 10px 30px rgba(20, 60, 120, 0.08);
         }
+        /* Multiselect tags */
+        .stMultiSelect [data-baseweb="tag"] {
+            background-color: #e8f1ff !important;
+            color: #1f2a44 !important;
+            border: 1px solid #cfe0ff !important;
+        }
+        .stMultiSelect [data-baseweb="tag"] svg {
+            color: #2a5bd7 !important;
+        }
         .kpi-card {
             background: white;
             border: 1px solid #e6eef7;
