@@ -50,6 +50,13 @@ def get_connection():
             yield conn
         finally:
             conn.close()
+    else:
+        conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        try:
+            yield conn
+        finally:
+            conn.close()
 
 
 def rows_to_dicts(cursor, rows):
@@ -59,13 +66,6 @@ def rows_to_dicts(cursor, rows):
         return [dict(row) for row in rows]
     cols = [c[0] for c in cursor.description]
     return [dict(zip(cols, row)) for row in rows]
-    else:
-        conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-        conn.row_factory = sqlite3.Row
-        try:
-            yield conn
-        finally:
-            conn.close()
 
 
 def init_db() -> None:
