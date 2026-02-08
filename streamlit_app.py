@@ -539,7 +539,7 @@ def main() -> None:
                     st.rerun()
 
             with col_b:
-                st.warning("Excluir produto remove apenas o cadastro. Transações antigas permanecem.")
+                st.info("Excluir produto remove apenas o cadastro. Transações antigas permanecem.")
                 if st.button("Excluir produto", type="secondary"):
                     excluir_produto(prod["id"])
                     st.success("Produto excluído.")
