@@ -31,6 +31,7 @@ Aplicativo completo para controle de estoque e análise de lucratividade de um n
 2. No Streamlit Cloud, selecione o repositório e informe o arquivo principal como `streamlit_app.py`.
 3. Configure o segredo `DATABASE_URL` no Streamlit Cloud com a string do Supabase.
 4. O app usa Postgres do Supabase quando `DATABASE_URL` estiver definido.
+5. Se houver erro de conexão, use o **Pooler Session Mode** no Supabase (IPv4) e atualize o `DATABASE_URL`.
 
 ### Migração do SQLite para Supabase
 Execute localmente (PowerShell):
